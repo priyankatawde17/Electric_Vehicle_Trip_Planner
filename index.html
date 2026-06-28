@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EV Trip Plan | EV Routing</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <div id="auth-overlay" class="auth-overlay">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2>EV TRIP PLAN <span class="highlight">PORTAL</span></h2>
+                <p id="auth-subtitle">User Login</p>
+            </div>
+
+            <div id="login-panel" class="auth-panel">
+                <div class="input-group">
+                    <label>User Email</label>
+                    <input type="email" id="login-email" placeholder="Email">
+                </div>
+
+                <div class="input-group" style="position: relative;">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="Password" style="padding-right: 50px;">
+                    <button type="button" id="toggleLoginBtn" onclick="toggleLoginPassword()"
+                        style="position: absolute; right: 10px; top: 32px; background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 0.8rem; font-weight: 600;">Show</button>
+                </div>
+
+                <button id="run-btn" onclick="executeLogin()">Login</button>
+                <p class="toggle-text">New user? <a href="#" onclick="toggleAuth(false)">Create account</a></p>
+            </div>
+
+            <div id="register-panel" class="auth-panel hidden">
+                <div style="display:flex; gap:10px;">
+                    <div class="input-group" style="flex:1;">
+                        <label>First Name</label>
+                        <input type="text" id="reg-fname" placeholder="First Name">
+                    </div>
+                    <div class="input-group" style="flex:1;">
+                        <label>Last Name</label>
+                        <input type="text" id="reg-lname" placeholder="Last Name">
+                    </div>
+                </div>
+
+                <div class="input-group"><label>Email</label><input type="email" id="reg-email" placeholder="Email">
+                </div>
+                <div class="input-group"><label>Phone Number</label><input type="tel" id="reg-phone" maxlength="10"
+                        placeholder="Phone Number"></div>
+                <div class="input-group"><label>Pass</label><input type="password" id="reg-password"
+                        placeholder="Password"></div>
+
+                <button id="run-btn" style="background: linear-gradient(135deg, #059669, #10b981);"
+                    onclick="executeRegistration()">Create Account</button>
+                <p class="toggle-text">Already logined? <a href="#" onclick="toggleAuth(true)">Return to login</a></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container no-print"></div>
+
+    <div id="main-app-wrapper" class="app-wrapper hidden">
+        <aside class="control-panel no-print">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>EV TRIP <span class="highlight">PLAN</span></h2>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="window.print()"
+                        style="padding: 8px; font-size: 0.75rem; background: #10b981; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">🖨️
+                        PDF</button>
+                </div>
+            </div>
+
+            <div class="booking-widget">
+                <div class="input-group"><label>🏢 FROM</label><select id="start_city"></select></div>
+                <div class="input-group"><label>📍 TO</label><select id="end_city"></select></div>
+                <div class="input-group"><label>🛑 ADD STOP (OPTIONAL)</label><select id="waypoint">
+                        <option value="None">None (Direct Route)</option>
+                    </select></div>
+                <div class="input-group"><label>📅 DATE OF JOURNEY</label><input type="date" id="trip_date"></div>
+
+                <hr style="border-color: rgba(255,255,255,0.1); margin: 15px 0;">
+
+                <div class="input-group"><label>🚗 SELECT EV CAR</label><select id="ev_model"></select></div>
+
+                <div class="input-group"><label>❄️ CLIMATE PREFERENCE</label>
+                    <select id="ac_on">
+                        <option value="1">AC (Air Conditioned)</option>
+                        <option value="0">Non-AC (Eco Mode)</option>
+                    </select>
+                </div>
+
+                <input type="hidden" id="speed" value="80">
+                <input type="hidden" id="neural_routing" value="true">
+                <button id="run-btn" onclick="runSimulation()" style="font-size: 1.1rem; padding: 18px;">SEARCH
+                    ROUTES</button>
+            </div>
+
+            <div class="history-panel">
+                <h4>🕒 Saved Trip History</h4>
+                <div id="history-list"></div>
+            </div>
+        </aside>
+
+        <main class="dashboard">
+            <div
+                style="display: flex; justify-content: flex-end; align-items:center; gap: 15px; width: 100%; margin-bottom: 10px;">
+                <span id="live-clock"
+                    style="font-size: 1rem; color: #cbd5e1; font-weight: 600; background: rgba(30,41,59,0.5); padding: 5px 15px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);">--:--:--</span>
+            </div>
+
+            <div class="top-row-grid">
+                <div class="data-card savings-box">
+                    <h3>Economics & Savings</h3>
+                    <div class="savings-grid">
+                        <div>
+                            <p>Money Saved</p><span class="save-val text-green">₹<span id="save-money">0</span></span>
+                        </div>
+                        <div>
+                            <p>Est. Charge Cost</p><span class="save-val text-red">₹<span
+                                    id="charge-cost">0</span></span>
+                        </div>
+                        <div>
+                            <p>CO2 Prevented</p><span class="save-val text-green"><span id="save-co2">0</span> kg</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="data-card status-bar-box">
+                    <h3>Thermal & Grid Balancing</h3>
+                    <div class="thermal-grid">
+                        <div>
+                            <p>Battery Core</p><span class="big-val text-green" id="bat-temp">--°C</span>
+                        </div>
+                        <div>
+                            <p>City Grid Load</p><span class="big-val text-blue" id="grid-status"
+                                style="font-size: 1.2rem;">--</span><br><span id="grid-stress">0</span>%
+                        </div>
+                        <div>
+                            <p>V2G Earnings</p><span class="big-val" style="color: #fbbf24;">₹<span
+                                    id="v2g-money">0</span></span>
+                        </div>
+                    </div>
+                    <div id="thermal-alert" class="badge bg-green"
+                        style="display: block; margin-top: 10px; text-align: center;">System Stable</div>
+                </div>
+
+                <div class="data-card weather-box" style="border-top: 4px solid #f59e0b;">
+                    <h3>Live Weather Monitor</h3>
+                    <div style="display:flex; align-items:center; gap: 15px; margin-top:10px;">
+                        <div id="w-icon" style="font-size: 3rem; text-shadow: 0 0 15px rgba(255,255,255,0.2);">🌤️</div>
+                        <div>
+                            <div id="w-temp" style="font-size: 1.6rem; font-weight: 800;">--°C</div>
+                            <div id="w-desc" style="color: #94a3b8; font-weight: 600;">Awaiting Sync</div>
+                        </div>
+                    </div>
+                    <p id="w-impact"
+                        style="margin-top: 12px; font-size: 0.8rem; color: #cbd5e1; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;">
+                        Impact on range: --</p>
+                </div>
+            </div>
+
+            <div class="data-card ai-insights-box">
+                <h3>🧠 Route Recommendations & Insights</h3>
+                <ul id="smart-insights-list"
+                    style="margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 0.95rem; line-height: 1.6;">
+                    <li>Awaiting search...</li>
+                </ul>
+            </div>
+
+            <div class="visuals-grid">
+                <div class="data-card map-section">
+                    <div class="map-header">
+                        <h3>Live Route Map</h3>
+                        <div class="map-legend">
+                            <span class="legend-item"><span class="dot" style="background:#10b981;"></span> Clear</span>
+                            <span class="legend-item"><span class="dot" style="background:#f59e0b;"></span>
+                                Moderate</span>
+                            <span class="legend-item"><span class="dot" style="background:#ef4444;"></span> Traffic
+                                Jam</span>
+                        </div>
+                    </div>
+                    <div id="map"></div>
+                    <p class="route-stats">
+                        Dist: <span id="opt-dist" class="highlight">--</span> km | Drain: <span id="opt-drain"
+                            class="highlight">--</span> %
+                        <br><span
+                            style="color: #10b981; font-size: 1.1rem; display: inline-block; margin-top: 5px;">Estimated
+                            Arrival: <span id="live-eta">--:--</span></span>
+                    </p>
+                </div>
+                <div class="data-card chart-container">
+                    <h3>Live Elevation Profile <span style="font-size: 0.8rem; color: #a855f7;">(Hover to locate)</span>
+                    </h3>
+                    <p id="elev-analysis-text"
+                        style="font-size:0.85rem; color:#10b981; font-weight:bold; margin-bottom:10px;">Analyzing route
+                        topography...</p>
+                    <div class="canvas-wrapper"><canvas id="elevationChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="data-card no-print">
+                <h3>🔄 Route Alternatives (Click to view on Map)</h3>
+                <div id="route-alts-container" class="charge-grid">
+                    <p style="color: #64748b;">Click Search Routes...</p>
+                </div>
+            </div>
+
+            <div class="data-card">
+                <div class="charge-header">
+                    <h3>Charging Stops & Network</h3>
+                    <div id="charge-status-badge" class="status-badge grey">Awaiting Search</div>
+                </div>
+                <div id="charging-container" class="charge-grid">
+                    <p style="color: #64748b;">Click Search Routes...</p>
+                </div>
+            </div>
+
+            <div class="data-card no-print" style="margin-bottom: 80px;">
+                <h3>🎧 Live Driving Playlists (Ad-Free)</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <iframe width="100%" height="180" src="https://www.youtube.com/embed/YwEKIl3qQzA"
+                        title="Driving Playlist 1" frameborder="0" allowfullscreen
+                        style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);"></iframe>
+                    <iframe width="100%" height="180" src="https://www.youtube.com/embed/00DvaPstcpo"
+                        title="Driving Playlist 2" frameborder="0" allowfullscreen
+                        style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);"></iframe>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <button class="chatbot-fab no-print" onclick="toggleChat()">💬 Need Help?</button>
+    <div class="chatbot-window no-print" id="chatbot-window">
+        <div class="chat-header"><span>🧠 Assistant</span><button onclick="toggleChat()">✖</button></div>
+        <div class="chat-body" id="chat-body">
+            <div class="bot-msg">Hello! Where are you traveling today?</div>
+        </div>
+        <div class="chat-options">
+            <button class="chat-chip" onclick="askBot('route')">🛣️ Route Info</button>
+            <button class="chat-chip" onclick="askBot('charging')">⚡ Charging Stations</button>
+            <button class="chat-chip" onclick="askBot('places')">🏰 Places to Visit</button>
+        </div>
+        <div class="chat-footer">
+            <input type="text" id="chat-input" placeholder="Type or click mic..." onkeypress="handleChatEnter(event)">
+            <button id="mic-btn" onclick="startDictation()"
+                style="cursor: pointer; background: #1e293b; color: #a855f7; border-left: 1px solid #334155; width: 40px;">🎙️</button>
+            <button onclick="sendChatMessage()" style="cursor: pointer; background: #3b82f6; color: white;">➤</button>
+        </div>
+    </div>
+
+    <div id="payment-modal" class="auth-overlay hidden">
+        <div class="auth-card" style="max-width: 440px; text-align: center;">
+            <div class="auth-header">
+                <h2 style="margin-bottom:0;">Secure <span class="highlight">Transaction</span></h2>
+            </div>
+            <div
+                style="margin-bottom: 15px; background:rgba(0,0,0,0.4); padding:15px; border-radius:10px; text-align:left;">
+                <b id="pay-station-name" style="color:white; font-size:1.05rem; display:block; margin-bottom:8px;"></b>
+                <div id="pay-math-breakdown"
+                    style="font-size:0.85rem; color:#94a3b8; border-bottom:1px solid #334155; padding-bottom:8px; margin-bottom:8px;">
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;"><span
+                        style="font-size:0.9rem; color:#cbd5e1;">Total Payable:</span>
+                    <h3 style="color:#10b981; margin:0; font-size:1.6rem;" id="pay-amount">-</h3>
+                </div>
+            </div>
+            <div class="input-group" style="text-align:left;">
+                <label>Select Payment Type</label>
+                <select id="pay_method" onchange="togglePaymentFields()">
+                    <option value="online">💻 Online Transaction (UPI / QR)</option>
+                    <option value="card">💳 Debit / Credit Card</option>
+                    <option value="cash">💵 Cash at Spot Counter</option>
+                </select>
+            </div>
+            <div id="card-payment-fields" class="hidden" style="transition: 0.3s;">
+                <div class="input-group" style="text-align:left;"><label>Card Number</label><input type="text"
+                        id="card_num" placeholder="4532-XXXX-XXXX-XXXX"></div>
+                <div style="display:flex; gap:10px; text-align:left;">
+                    <div class="input-group" style="flex:1;"><label>Expired Input</label><input type="text"
+                            id="card_exp" placeholder="MM/YY"></div>
+                    <div class="input-group" style="flex:1;"><label>SVC Number</label><input type="password"
+                            id="card_svc" maxlength="3" placeholder="***"></div>
+                </div>
+            </div>
+            <div id="online-payment-fields" style="padding:10px 0; text-align:center;">
+                <div
+                    style="background:white; width:130px; height:130px; margin:0 auto 10px auto; padding:8px; border-radius:8px;">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg"
+                        style="width:100%; height:100%; object-fit:contain;">
+                </div>
+                <p style="font-size:0.75rem; color:#94a3b8;">Scan this secure encrypted gateway code via any UPI App</p>
+            </div>
+            <div id="cash-payment-fields" class="hidden"
+                style="background:rgba(245,158,11,0.1); border:1px dashed #f59e0b; padding:12px; border-radius:8px; margin-bottom:15px; text-align:left;">
+                <p style="font-size:0.85rem; color:#fcd34d; margin:0;">📝 Booking token will be generated now. You can
+                    hand over cash directly at the arrival counter desk.</p>
+            </div>
+            <button id="pay-btn" onclick="processPayment()"
+                style="width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px;">Confirm
+                & Book Now</button>
+            <button onclick="closeModals()"
+                style="background: transparent; border: 1px solid #334155; color: #94a3b8; width: 100%; padding: 12px; border-radius: 8px; margin-top: 10px; cursor:pointer;">Cancel</button>
+        </div>
+    </div>
+
+    <div id="hotel-modal" class="auth-overlay hidden">
+        <div class="auth-card" style="max-width: 500px;">
+            <div class="auth-header">
+                <h2 style="margin-bottom:0;">Transit <span class="highlight">Lounges & Hotels</span></h2>
+            </div>
+            <p style="color:#cbd5e1; font-size:0.9rem; margin-bottom:15px; text-align:center;">Located inside or
+                adjacent to <b id="hotel-station-name" style="color:#38bdf8;"></b></p>
+            <div id="hotel-listings-box" style="display:flex; flex-direction:column; gap:12px;"></div>
+            <button onclick="closeModals()"
+                style="background: transparent; border: 1px solid #334155; color: #94a3b8; width: 100%; padding: 12px; border-radius: 8px; margin-top: 15px; cursor:pointer;">Close</button>
+        </div>
+    </div>
+
+    <div id="cctv-modal" class="auth-overlay hidden">
+        <div class="auth-card" style="max-width: 600px; padding: 20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0; color:#ef4444;">🔴 LIVE REC: <span id="cctv-station-name"
+                        style="color:white; font-size:1rem;"></span></h3>
+                <button onclick="closeModals()"
+                    style="background:none; border:none; color:white; font-size:1.2rem; cursor:pointer;">✖</button>
+            </div>
+            <div
+                style="width:100%; height:300px; border-radius:8px; overflow:hidden; border:2px solid #334155; position:relative;">
+                <img id="cctv-feed-img" src=""
+                    style="width:100%; height:100%; object-fit:cover; filter: grayscale(100%) sepia(100%) hue-rotate(90deg) brightness(80%) contrast(120%);" />
+                <div
+                    style="position:absolute; top:10px; left:10px; color:white; font-family:monospace; text-shadow:1px 1px 0 #000;">
+                    CAM-04 | NIGHT VISION</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
